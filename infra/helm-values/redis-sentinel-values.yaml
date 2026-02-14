@@ -1,0 +1,28 @@
+auth:
+  enabled: true
+  password: "redis_pass"
+
+# 啟用 Sentinel 架構
+sentinel:
+  enabled: true
+  masterSet: "mymaster"
+  quorum: 2
+
+# replica 數量（不包含 master）
+replica:
+  replicaCount: 3
+
+# master 只有 1 台（sentinel 架構就是 1 master + N replicas）
+master:
+  count: 1
+
+# 啟用持久化，更像實戰
+persistence:
+  enabled: true
+  size: 2Gi
+
+# 資源限制（可以先保守一點）
+resources:
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
