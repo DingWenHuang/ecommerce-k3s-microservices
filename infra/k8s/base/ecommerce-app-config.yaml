@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ecommerce-app-config
+  namespace: ecommerce
+data:
+  # =========================
+  # Spring 共用設定（非敏感）
+  # =========================
+
+  # 啟用 k8s 環境用的 profile
+  SPRING_PROFILES_ACTIVE: "k8s"
+
+  # Spring Actuator 健康檢查端點（後續 liveness/readiness 會用）
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info"
+  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+
+  # Log 等級（可依服務再覆蓋）
+  LOGGING_LEVEL_ROOT: "INFO"
+
+  # =========================
+  # 服務間呼叫（K8s Service DNS）
+  # 之後 Feign / Gateway route 可使用
+  # =========================
+  AUTH_SERVICE_URL: "http://auth-service:8080"
+  USER_SERVICE_URL: "http://user-service:8080"
+  PRODUCT_SERVICE_URL: "http://product-service:8080"
+  CART_SERVICE_URL: "http://cart-service:8080"
+  ORDER_SERVICE_URL: "http://order-service:8080"
+
+  # =========================
+  # 基礎 infra 位置（非敏感）
+  # =========================
+  POSTGRES_HOST: "postgres"
+  POSTGRES_PORT: "5432"
+  REDIS_SERVICE_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_SENTINEL_PORT: "26379"
+  REDIS_MASTER_SET: "mymaster"
