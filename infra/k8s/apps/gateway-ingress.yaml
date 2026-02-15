@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gateway-ingress
+  namespace: ecommerce
+  annotations:
+    # 這裡保留註釋：不同 ingress controller 可能需要不同 annotation
+    # traefik 通常可不加也能運作
+spec:
+  rules:
+    - host: api.localtest.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 80

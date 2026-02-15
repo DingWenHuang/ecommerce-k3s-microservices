@@ -1,5 +1,6 @@
 # Java
 target/
+META-INF/
 *.log
 *.iml
 .idea/

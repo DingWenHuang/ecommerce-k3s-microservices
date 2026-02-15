@@ -1,0 +1,43 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gateway
+
+# Gateway routes（先路由到 echo-service 用來測試）
+# 之後我們會改成：
+# /auth/** -> auth-service
+# /products/** -> product-service
+# ...
+  cloud:
+    gateway:
+      routes:
+        - id: echo
+          uri: http://echo:80
+          predicates:
+            - Path=/echo/**
+          filters:
+            # 把 /echo 前綴拿掉，轉成 /
+            - StripPrefix=1
+
+
+# Actuator：讓 k8s probes 能檢查服務是否健康
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+# JWT 設定（會由環境變數注入）
+security:
+  jwt:
+    secret: ${JWT_SECRET:}
+    # demo 階段先不強制驗證，等 Step 7 auth-service 完成再改 true
+    enforce: ${JWT_ENFORCE:false}
+
+
