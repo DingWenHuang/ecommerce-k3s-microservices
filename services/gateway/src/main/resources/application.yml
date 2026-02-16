@@ -13,6 +13,10 @@ spring:
   cloud:
     gateway:
       routes:
+        - id: auth
+          uri: http://auth-service:8080
+          predicates:
+            - Path=/auth/**
         - id: echo
           uri: http://echo:80
           predicates:

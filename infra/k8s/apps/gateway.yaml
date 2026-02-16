@@ -31,7 +31,7 @@ spec:
           env:
             # demo 階段不強制 JWT，等 Step 7 再改 true
             - name: JWT_ENFORCE
-              value: "false"
+              value: "true"
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
