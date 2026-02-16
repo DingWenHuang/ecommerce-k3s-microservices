@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:${POSTGRES_SERVICE_HOST:postgres}}:${POSTGRES_PORT:5432}/${POSTGRES_DB:ecommerce}
+    username: ${POSTGRES_USER:ecommerce_user}
+    password: ${POSTGRES_PASSWORD:ecommerce_pass}
+  jpa:
+    hibernate:
+      ddl-auto: update # demo 方便：自動建表；之後可改成 migration
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
