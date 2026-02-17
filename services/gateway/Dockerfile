@@ -8,8 +8,6 @@ RUN mvn -q -e -DskipTests dependency:go-offline
 
 # 再 copy 原始碼進來編譯
 COPY src ./src
-# 看 Docker builder 的 Java 版本
-RUN java -version && mvn -v
 RUN mvn -q -DskipTests clean package
 
 # ========= Run stage =========

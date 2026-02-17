@@ -43,10 +43,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        String path = exchange.getRequest().getURI().getPath();
-
-        // 放行健康檢查與 auth API
-        if (matcher.match("/actuator/**", path) || matcher.match("/auth/**", path)) {
+        if (isPublic(exchange)) {
             return chain.filter(exchange);
         }
 
@@ -93,5 +90,19 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
     @Override
     public int getOrder() {
         return -50; // 在 trace filter 之後、路由之前
+    }
+
+    private boolean isPublic(ServerWebExchange exchange) {
+        String path = exchange.getRequest().getURI().getPath();
+        String method = String.valueOf(exchange.getRequest().getMethod());
+
+        // 放行健康檢查與 auth API
+        if (matcher.match("/actuator/**", path)) return true;
+        if (matcher.match("/auth/**", path)) return true;
+
+        // 放行「未登入可瀏覽」的商品查詢（只放行 GET）
+        if ("GET".equals(method) && matcher.match("/products/**", path)) return true;
+
+        return false;
     }
 }

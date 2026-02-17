@@ -41,7 +41,7 @@ public class ProductController {
 
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/admin/products/{id}/restock")
-    public ResponseEntity<ProductDtos.ProductResponse> restock(@PathVariable long id,
+    public ResponseEntity<ProductDtos.ProductResponse> restock(@PathVariable("id") long id,
                                                                @RequestBody ProductDtos.RestockRequest req) {
         return ResponseEntity.ok(service.restock(id, req.amount()));
     }
@@ -49,7 +49,7 @@ public class ProductController {
     // ===== internal API（給 order-service）=====
 
     @PostMapping("/internal/products/{id}/reserve")
-    public ResponseEntity<ProductDtos.ReserveResponse> reserve(@PathVariable long id,
+    public ResponseEntity<ProductDtos.ReserveResponse> reserve(@PathVariable("id") long id,
                                                                @RequestBody ProductDtos.ReserveRequest req) {
         return ResponseEntity.ok(service.reserve(id, req.amount()));
     }

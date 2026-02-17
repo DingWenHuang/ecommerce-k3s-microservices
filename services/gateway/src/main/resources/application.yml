@@ -13,6 +13,14 @@ spring:
   cloud:
     gateway:
       routes:
+        - id: product-public
+          uri: http://product-service:8080
+          predicates:
+            - Path=/products/**
+        - id: product-admin
+          uri: http://product-service:8080
+          predicates:
+            - Path=/admin/products/**
         - id: auth
           uri: http://auth-service:8080
           predicates:
