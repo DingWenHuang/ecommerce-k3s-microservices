@@ -1,0 +1,19 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: order-service
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+# Feign 目標服務 URL（由 ConfigMap 可覆蓋）
+PRODUCT_SERVICE_URL: ${PRODUCT_SERVICE_URL:http://product-service:8080}

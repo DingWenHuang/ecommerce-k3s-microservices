@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:${POSTGRES_SERVICE_HOST:postgres}}:${POSTGRES_PORT:5432}/${POSTGRES_DB:ecommerce}
+    username: ${POSTGRES_USER:ecommerce_user}
+    password: ${POSTGRES_PASSWORD:ecommerce_pass}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # Redis Sentinel 連線（Bitnami redis service 同時開 6379/26379）
+  data:
+    redis:
+      password: ${REDIS_PASSWORD}
+      timeout: 2s
+      sentinel:
+        master: ${REDIS_MASTER_SET:mymaster}
+        nodes: ${REDIS_SERVICE_HOST:redis}:${REDIS_SENTINEL_PORT:26379}
+        password: ${REDIS_PASSWORD}
