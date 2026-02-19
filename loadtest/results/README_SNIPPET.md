@@ -1,10 +1,3 @@
-
----
-
-# 壓測與不超賣證據
-
-（以下內容由 k6 summary 自動生成，詳見 `loadtest/results/README_SNIPPET.md`）
-
 ## 壓測證據（k6 搶購 1000 併發）
 
 - 測試工具：k6（Docker 執行）
