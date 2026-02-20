@@ -41,6 +41,7 @@ spring:
         corsConfigurations:
           '[/**]':
             allowedOrigins:
+              - "http://shop.localtest.me"
               - "http://localhost:5173"
               - "http://localhost:3000"
             allowedMethods:

@@ -1,3 +1,13 @@
+## 前端入口
+
+- 前端（React）：http://shop.localtest.me
+- 後端 API（Gateway）：http://api.localtest.me
+
+### 角色
+- USER：可瀏覽商品、加入購物車、下單、查訂單
+- ADMIN：可新增商品、補貨（Admin 頁面）
+
+
 
 ---
 
