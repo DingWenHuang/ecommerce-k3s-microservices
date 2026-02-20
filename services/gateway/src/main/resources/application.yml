@@ -36,7 +36,26 @@ spring:
           filters:
             # 把 /echo 前綴拿掉，轉成 /
             - StripPrefix=1
-
+      globalcors:
+        add-to-simple-url-handler-mapping: true
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:5173"
+              - "http://localhost:3000"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - "*"
+            exposedHeaders:
+              - "*"
+            allowCredentials: true
+            maxAge: 3600
 
 # Actuator：讓 k8s probes 能檢查服務是否健康
 management:

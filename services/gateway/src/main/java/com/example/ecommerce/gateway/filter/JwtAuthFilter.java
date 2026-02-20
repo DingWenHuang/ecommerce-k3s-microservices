@@ -11,6 +11,7 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
@@ -94,14 +95,15 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
 
     private boolean isPublic(ServerWebExchange exchange) {
         String path = exchange.getRequest().getURI().getPath();
-        String method = String.valueOf(exchange.getRequest().getMethod());
+        HttpMethod httpMethod = exchange.getRequest().getMethod();
 
         // 放行健康檢查與 auth API
         if (matcher.match("/actuator/**", path)) return true;
         if (matcher.match("/auth/**", path)) return true;
 
         // 放行「未登入可瀏覽」的商品查詢（只放行 GET）
-        if ("GET".equals(method) && matcher.match("/products/**", path)) return true;
+        if (HttpMethod.GET == httpMethod && matcher.match("/products/**", path)) return true;
+        if (HttpMethod.OPTIONS == httpMethod) return true;
 
         return false;
     }
