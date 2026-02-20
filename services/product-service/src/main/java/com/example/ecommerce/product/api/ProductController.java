@@ -1,6 +1,7 @@
 package com.example.ecommerce.product.api;
 
 import com.example.ecommerce.product.api.dto.ProductDtos;
+import com.example.ecommerce.product.domain.ProductType;
 import com.example.ecommerce.product.service.ProductService;
 
 import org.springframework.http.ResponseEntity;
@@ -24,11 +25,16 @@ public class ProductController {
         this.service = service;
     }
 
-    // ===== 公開 API =====
+    /**
+     * 公開商品查詢 API
+     * 前端分區會用：
+     * - /products?type=NORMAL
+     * - /products?type=FLASH_SALE
+     */
 
     @GetMapping("/products")
-    public ResponseEntity<List<ProductDtos.ProductResponse>> list() {
-        return ResponseEntity.ok(service.list());
+    public ResponseEntity<List<ProductDtos.ProductResponse>> list(@RequestParam(name = "type", required = false) ProductType type) {
+        return ResponseEntity.ok(service.listByType(type));
     }
 
     // ===== 管理 API（ADMIN）=====

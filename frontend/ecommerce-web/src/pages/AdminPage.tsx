@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Card, Form, Input, InputNumber, Modal, Space, Table, Typography, message } from "antd";
+import { Alert, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Table, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { adminCreateProduct, adminRestock, fetchProducts, type Product } from "../api/productApi";
+import { adminCreateProduct, adminRestock, fetchProductsByType, type Product, type ProductType } from "../api/productApi";
 import { toErrorMessage } from "../api/apiClient";
 
 const { Title, Text } = Typography;
@@ -9,7 +9,8 @@ const { Title, Text } = Typography;
 type ProductRow = Product & { key: number };
 
 export function AdminPage() {
-    const [products, setProducts] = useState<Product[]>([]);
+    const [normalProducts, setNormalProducts] = useState<Product[]>([]);
+    const [flashProducts, setFlashProducts] = useState<Product[]>([]);
     const [error, setError] = useState<string | null>(null);
 
     const [isRestockModalOpen, setIsRestockModalOpen] = useState(false);
@@ -19,7 +20,12 @@ export function AdminPage() {
     async function reload() {
         setError(null);
         try {
-            setProducts(await fetchProducts());
+            const [normal, flash] = await Promise.all([
+                fetchProductsByType("NORMAL"),
+                fetchProductsByType("FLASH_SALE"),
+            ]);
+            setNormalProducts(normal);
+            setFlashProducts(flash);
         } catch (e) {
             setError(toErrorMessage(e));
         }
@@ -27,10 +33,10 @@ export function AdminPage() {
 
     useEffect(() => { reload(); }, []);
 
-    async function onCreate(values: { name: string; price: number; stock: number }) {
+    async function onCreate(values: { name: string; price: number; stock: number; productType: ProductType }) {
         setError(null);
         try {
-            await adminCreateProduct(values.name, values.price, values.stock);
+            await adminCreateProduct(values.name, values.price, values.stock, values.productType);
             message.success("新增商品成功");
             await reload();
         } catch (e) {
@@ -58,11 +64,10 @@ export function AdminPage() {
         }
     }
 
-    const rows: ProductRow[] = products.map((p) => ({ ...p, key: p.id }));
-
     const columns: ColumnsType<ProductRow> = [
         { title: "ID", dataIndex: "id", width: 80 },
         { title: "名稱", dataIndex: "name" },
+        { title: "類型", dataIndex: "productType", width: 140 },
         { title: "價格", dataIndex: "price", render: (v: number) => v.toFixed(2) },
         { title: "庫存", dataIndex: "stock" },
         {
@@ -79,7 +84,7 @@ export function AdminPage() {
     return (
         <div>
             <Title level={3} style={{ marginTop: 0 }}>Admin 管理</Title>
-            <Text type="secondary">展示：ADMIN RBAC（新增商品/補貨）</Text>
+            <Text type="secondary">新增商品時可指定 NORMAL / FLASH_SALE</Text>
 
             <div style={{ height: 16 }} />
 
@@ -91,10 +96,19 @@ export function AdminPage() {
                 <Form
                     layout="inline"
                     onFinish={onCreate}
-                    initialValues={{ name: "New Product", price: 1999.99, stock: 10 }}
+                    initialValues={{ name: "New Product", price: 1999.99, stock: 10, productType: "NORMAL" }}
                 >
                     <Form.Item name="name" rules={[{ required: true, message: "請輸入名稱" }]}>
                         <Input placeholder="商品名稱" style={{ width: 220 }} />
+                    </Form.Item>
+
+                    <Form.Item name="productType" rules={[{ required: true, message: "請選擇商品類型" }]}>
+                        <Select style={{ width: 200 }}
+                                options={[
+                                    { value: "NORMAL", label: "NORMAL（一般）" },
+                                    { value: "FLASH_SALE", label: "FLASH_SALE（搶購）" },
+                                ]}
+                        />
                     </Form.Item>
 
                     <Form.Item name="price" rules={[{ required: true, message: "請輸入價格" }]}>
@@ -118,7 +132,14 @@ export function AdminPage() {
                 </Space>
 
                 <div style={{ height: 12 }} />
-                <Table columns={columns} dataSource={rows} />
+
+                <Title level={5}>一般商品（NORMAL）</Title>
+                <Table columns={columns} dataSource={normalProducts.map((p) => ({ ...p, key: p.id }))} pagination={false} />
+
+                <div style={{ height: 16 }} />
+
+                <Title level={5}>搶購商品（FLASH_SALE）</Title>
+                <Table columns={columns} dataSource={flashProducts.map((p) => ({ ...p, key: p.id }))} />
             </Card>
 
             <Modal

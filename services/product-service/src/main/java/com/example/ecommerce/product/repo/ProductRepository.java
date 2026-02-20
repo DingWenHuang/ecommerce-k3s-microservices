@@ -1,6 +1,7 @@
 package com.example.ecommerce.product.repo;
 
 import com.example.ecommerce.product.domain.ProductEntity;
+import com.example.ecommerce.product.domain.ProductType;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -8,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 /**
  * 商品 Repository：
@@ -41,4 +44,6 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
             WHERE id = :id
             """, nativeQuery = true)
     int restockAtomic(@Param("id") long id, @Param("qty") int qty);
+
+    List<ProductEntity> findByProductTypeOrderByIdAsc(ProductType productType);
 }

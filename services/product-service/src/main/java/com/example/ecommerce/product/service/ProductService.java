@@ -2,6 +2,7 @@ package com.example.ecommerce.product.service;
 
 import com.example.ecommerce.product.api.dto.ProductDtos;
 import com.example.ecommerce.product.domain.ProductEntity;
+import com.example.ecommerce.product.domain.ProductType;
 import com.example.ecommerce.product.repo.ProductRepository;
 
 import org.springframework.stereotype.Service;
@@ -27,9 +28,18 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
+    public List<ProductDtos.ProductResponse> listByType(ProductType type) {
+        ProductType resolved = (type == null) ? ProductType.NORMAL : type;
+        return repo.findByProductTypeOrderByIdAsc(resolved)
+                .stream()
+                .map(p -> new ProductDtos.ProductResponse(p.getId(), p.getName(), p.getPrice(), p.getStock(), p.getProductType()))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public List<ProductDtos.ProductResponse> list() {
         return repo.findAll().stream()
-                .map(p -> new ProductDtos.ProductResponse(p.getId(), p.getName(), p.getPrice(), p.getStock()))
+                .map(p -> new ProductDtos.ProductResponse(p.getId(), p.getName(), p.getPrice(), p.getStock(), p.getProductType()))
                 .toList();
     }
 
@@ -46,7 +56,7 @@ public class ProductService {
         }
 
         ProductEntity saved = repo.save(new ProductEntity(req.name(), req.price(), req.stock()));
-        return new ProductDtos.ProductResponse(saved.getId(), saved.getName(), saved.getPrice(), saved.getStock());
+        return new ProductDtos.ProductResponse(saved.getId(), saved.getName(), saved.getPrice(), saved.getStock(), saved.getProductType());
     }
 
     @Transactional
@@ -57,7 +67,7 @@ public class ProductService {
         if (updated != 1) throw new IllegalArgumentException("商品不存在");
 
         ProductEntity p = repo.findById(id).orElseThrow();
-        return new ProductDtos.ProductResponse(p.getId(), p.getName(), p.getPrice(), p.getStock());
+        return new ProductDtos.ProductResponse(p.getId(), p.getName(), p.getPrice(), p.getStock(), p.getProductType());
     }
 
     @Transactional

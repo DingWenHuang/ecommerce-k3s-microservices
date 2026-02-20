@@ -1,5 +1,7 @@
 package com.example.ecommerce.product.api.dto;
 
+import com.example.ecommerce.product.domain.ProductType;
+
 import java.math.BigDecimal;
 
 /**
@@ -7,9 +9,9 @@ import java.math.BigDecimal;
  */
 public class ProductDtos {
 
-    public record ProductResponse(Long id, String name, BigDecimal price, Integer stock) {}
+    public record ProductResponse(Long id, String name, BigDecimal price, Integer stock, ProductType productType) {}
 
-    public record CreateProductRequest(String name, BigDecimal price, Integer stock) {}
+    public record CreateProductRequest(String name, BigDecimal price, Integer stock, ProductType productType) {}
 
     public record RestockRequest(Integer amount) {}
 
