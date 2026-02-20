@@ -1,17 +1,60 @@
 import { useState } from "react";
-import { useCart } from "../cart/CartContext";
+import { Alert, Button, Card, InputNumber, Space, Table, Typography, message } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { createOrder } from "../api/orderApi";
 import { toErrorMessage } from "../api/apiClient";
+import { useCart } from "../cart/CartContext";
+
+const { Title, Text } = Typography;
+
+type CartRow = {
+    key: number;
+    productId: number;
+    name: string;
+    unitPrice: number;
+    quantity: number;
+    lineAmount: number;
+};
 
 export function CartPage() {
     const cart = useCart();
     const [error, setError] = useState<string | null>(null);
-    const [lastOrderId, setLastOrderId] = useState<number | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    async function checkoutSingleItem() {
+    const rows: CartRow[] = cart.items.map((item) => ({
+        key: item.product.id,
+        productId: item.product.id,
+        name: item.product.name,
+        unitPrice: item.product.price,
+        quantity: item.quantity,
+        lineAmount: item.product.price * item.quantity,
+    }));
+
+    const columns: ColumnsType<CartRow> = [
+        { title: "商品", dataIndex: "name" },
+        { title: "單價", dataIndex: "unitPrice", render: (v: number) => v.toFixed(2) },
+        {
+            title: "數量",
+            dataIndex: "quantity",
+            render: (_, row) => (
+                <InputNumber
+                    min={1}
+                    value={row.quantity}
+                    onChange={(value) => cart.setQuantity(row.productId, Number(value ?? 1))}
+                />
+            ),
+        },
+        { title: "小計", dataIndex: "lineAmount", render: (v: number) => v.toFixed(2) },
+        {
+            title: "操作",
+            render: (_, row) => (
+                <Button danger onClick={() => cart.removeFromCart(row.productId)}>移除</Button>
+            ),
+        },
+    ];
+
+    async function checkout() {
         setError(null);
-        setLastOrderId(null);
 
         if (cart.items.length === 0) {
             setError("購物車是空的");
@@ -26,8 +69,8 @@ export function CartPage() {
         setIsSubmitting(true);
         try {
             const order = await createOrder(item.product.id, item.quantity, item.product.price);
-            setLastOrderId(order.orderId);
             cart.clearCart();
+            message.success(`下單成功！Order #${order.orderId}`);
         } catch (e) {
             setError(toErrorMessage(e));
         } finally {
@@ -37,46 +80,26 @@ export function CartPage() {
 
     return (
         <div>
-            <h2>購物車</h2>
+            <Title level={3} style={{ marginTop: 0 }}>購物車</Title>
+            <Text type="secondary">展示：前端購物車狀態＋呼叫 /orders 下單（需登入）</Text>
 
-            {cart.items.length === 0 ? (
-                <div>目前沒有商品</div>
-            ) : (
-                <div style={{ display: "grid", gap: 12 }}>
-                    {cart.items.map((item) => (
-                        <div key={item.product.id} style={{ border: "1px solid #eee", borderRadius: 8, padding: 12 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                <strong>{item.product.name}</strong>
-                                <button onClick={() => cart.removeFromCart(item.product.id)}>移除</button>
-                            </div>
+            <div style={{ height: 16 }} />
 
-                            <div>單價：{item.product.price.toFixed(2)}</div>
+            {error && <Alert type="error" message={error} showIcon style={{ marginBottom: 12 }} />}
 
-                            <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
-                                數量
-                                <input
-                                    type="number"
-                                    min={1}
-                                    value={item.quantity}
-                                    onChange={(e) => cart.setQuantity(item.product.id, Number(e.target.value))}
-                                    style={{ width: 100 }}
-                                />
-                            </label>
-                        </div>
-                    ))}
+            <Card>
+                <Table columns={columns} dataSource={rows} pagination={false} />
 
-                    <div style={{ marginTop: 8 }}>
-                        <strong>總金額（前端顯示）：{cart.totalAmount.toFixed(2)}</strong>
-                    </div>
-
-                    <button onClick={checkoutSingleItem} disabled={isSubmitting}>
-                        {isSubmitting ? "下單中..." : "下單（搶購）"}
-                    </button>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
+                    <div />
+                    <Space>
+                        <strong>總金額：{cart.totalAmount.toFixed(2)}</strong>
+                        <Button type="primary" onClick={checkout} loading={isSubmitting}>
+                            下單（搶購）
+                        </Button>
+                    </Space>
                 </div>
-            )}
-
-            {lastOrderId && <div style={{ marginTop: 12, color: "green" }}>下單成功！Order ID: {lastOrderId}</div>}
-            {error && <div style={{ marginTop: 12, color: "crimson" }}>{error}</div>}
+            </Card>
         </div>
     );
 }

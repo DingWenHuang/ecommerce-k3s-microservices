@@ -1,6 +1,18 @@
 import { useEffect, useState } from "react";
+import { Alert, Card, Table, Typography } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { fetchMyOrders, type Order } from "../api/orderApi";
 import { toErrorMessage } from "../api/apiClient";
+
+const { Title, Text } = Typography;
+
+type OrderRow = {
+    key: number;
+    orderId: number;
+    status: string;
+    totalAmount: number;
+    itemsText: string;
+};
 
 export function OrdersPage() {
     const [orders, setOrders] = useState<Order[]>([]);
@@ -10,8 +22,7 @@ export function OrdersPage() {
         async function load() {
             setError(null);
             try {
-                const data = await fetchMyOrders();
-                setOrders(data);
+                setOrders(await fetchMyOrders());
             } catch (e) {
                 setError(toErrorMessage(e));
             }
@@ -19,26 +30,35 @@ export function OrdersPage() {
         load();
     }, []);
 
+    const rows: OrderRow[] = orders.map((o) => ({
+        key: o.orderId,
+        orderId: o.orderId,
+        status: o.status,
+        totalAmount: o.totalAmount,
+        itemsText: o.items
+            .map((i) => `商品${i.productId}×${i.quantity}（小計${i.lineAmount.toFixed(2)}）`)
+            .join(" / "),
+    }));
+
+    const columns: ColumnsType<OrderRow> = [
+        { title: "訂單編號", dataIndex: "orderId" },
+        { title: "狀態", dataIndex: "status" },
+        { title: "總金額", dataIndex: "totalAmount", render: (v: number) => v.toFixed(2) },
+        { title: "明細", dataIndex: "itemsText" },
+    ];
+
     return (
         <div>
-            <h2>我的訂單</h2>
-            {error && <div style={{ color: "crimson" }}>{error}</div>}
+            <Title level={3} style={{ marginTop: 0 }}>我的訂單</Title>
+            <Text type="secondary">展示：呼叫 /orders 查詢（需登入）</Text>
 
-            <div style={{ display: "grid", gap: 12 }}>
-                {orders.map((o) => (
-                    <div key={o.orderId} style={{ border: "1px solid #eee", borderRadius: 8, padding: 12 }}>
-                        <div><strong>Order #{o.orderId}</strong>（{o.status}）</div>
-                        <div>總金額：{o.totalAmount.toFixed(2)}</div>
-                        <div style={{ marginTop: 8 }}>
-                            {o.items.map((i) => (
-                                <div key={i.productId}>
-                                    商品 {i.productId} × {i.quantity}（單價 {i.unitPrice.toFixed(2)}，小計 {i.lineAmount.toFixed(2)}）
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                ))}
-            </div>
+            <div style={{ height: 16 }} />
+
+            {error && <Alert type="error" message={error} showIcon style={{ marginBottom: 12 }} />}
+
+            <Card>
+                <Table columns={columns} dataSource={rows} />
+            </Card>
         </div>
     );
 }

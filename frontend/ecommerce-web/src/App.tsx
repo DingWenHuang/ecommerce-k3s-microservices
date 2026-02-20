@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { Layout } from "./ui/Layout";
+import { AppLayout } from "./ui/AppLayout";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ProductsPage } from "./pages/ProductsPage";
@@ -12,7 +12,7 @@ import { RequireAdmin } from "./auth/RequireAdmin";
 export function App() {
     return (
         <BrowserRouter>
-            <Layout>
+            <AppLayout>
                 <Routes>
                     <Route path="/" element={<Navigate to="/products" replace />} />
                     <Route path="/login" element={<LoginPage />} />
@@ -49,7 +49,7 @@ export function App() {
 
                     <Route path="*" element={<div>找不到頁面</div>} />
                 </Routes>
-            </Layout>
+            </AppLayout>
         </BrowserRouter>
     );
 }
