@@ -59,4 +59,9 @@ public class ProductController {
                                                                @RequestBody ProductDtos.ReserveRequest req) {
         return ResponseEntity.ok(service.reserve(id, req.amount()));
     }
+
+    @GetMapping("/internal/products/{id}")
+    public ResponseEntity<ProductDtos.ProductResponse> getProductInfo(@PathVariable("id") long id) {
+        return ResponseEntity.ok(service.getProductInfo(id));
+    }
 }

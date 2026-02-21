@@ -13,10 +13,12 @@ import java.util.List;
 
 /**
  * 商品業務邏輯：
+ * - listByType：取得不同商品類型的列表
  * - list：公開商品列表
  * - create：新增商品（ADMIN）
  * - restock：補貨（ADMIN）
  * - reserve：原子扣庫存（internal，給 order-service）
+ * - getProductInfo：取得商品資訊（internal，給 order-service）
  */
 @Service
 public class ProductService {
@@ -79,5 +81,12 @@ public class ProductService {
 
         // updated=0 表示庫存不足或商品不存在（demo 階段先用簡單訊息）
         return new ProductDtos.ReserveResponse(false, "OUT_OF_STOCK_OR_NOT_FOUND");
+    }
+
+    @Transactional(readOnly = true)
+    public ProductDtos.ProductResponse getProductInfo(long id) {
+        ProductEntity p = repo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("商品不存在: " + id));
+        return new ProductDtos.ProductResponse(p.getId(), p.getName(), p.getPrice(), p.getStock(), p.getProductType());
     }
 }
