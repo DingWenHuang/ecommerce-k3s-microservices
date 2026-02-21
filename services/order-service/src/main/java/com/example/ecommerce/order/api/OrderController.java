@@ -28,7 +28,8 @@ public class OrderController {
         this.service = service;
     }
 
-    @PostMapping
+    // TODO 這個方法會在下一步被修改為搶購邏輯，這邊先不改動
+    @PostMapping("/flash")
     public ResponseEntity<?> create(Authentication authentication,
                                     @RequestBody OrderDtos.CreateOrderRequest req) {
         Long userId = Long.valueOf(authentication.getName());
@@ -42,6 +43,16 @@ public class OrderController {
             case "BUSY_TRY_AGAIN" -> ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(result);
             default -> ResponseEntity.badRequest().body(result);
         };
+    }
+
+    @PostMapping("/normal")
+    public ResponseEntity<?> createNormalOrder(Authentication authentication,
+                                    @RequestBody OrderDtos.CreateNormalOrderRequest req) {
+        Long userId = Long.valueOf(authentication.getName());
+        var result = service.createNormalOrder(userId, req);
+        if (result.success()) return ResponseEntity.ok(result.order());
+
+        return ResponseEntity.badRequest().body(result);
     }
 
     @GetMapping

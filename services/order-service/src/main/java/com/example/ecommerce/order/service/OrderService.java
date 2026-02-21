@@ -11,7 +11,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -35,6 +37,7 @@ public class OrderService {
         this.lockService = lockService;
     }
 
+    // TODO 這個方法會在下一步被修改為搶購邏輯，這邊先不改動
     @Transactional
     public OrderDtos.CreateOrderResult createOrder(Long userId, OrderDtos.CreateOrderRequest req) {
         if (req.productId() == null || req.quantity() == null || req.unitPrice() == null) {
@@ -86,6 +89,75 @@ public class OrderService {
             lockService.unlock(lockKey, lockValue);
         }
     }
+
+    @Transactional
+    public OrderDtos.CreateOrderResult createNormalOrder(Long userId, OrderDtos.CreateNormalOrderRequest request) {
+        OrderDtos.CreateOrderResult validatedRequest = validateRequest(request);
+        if (!"VALID_REQUEST".equals(validatedRequest.message())) {
+            return validatedRequest;
+        }
+
+        // 1) 讀取商品資訊（price/type）
+        List<ResolvedItem> resolvedItems = new ArrayList<>();
+        for (OrderDtos.CreateNormalOrderItem item : request.items()) {
+            ProductClient.ProductInfo product = productClient.getProductInfo(item.productId());
+
+            if (!"NORMAL".equals(product.productType())) {
+                return new OrderDtos.CreateOrderResult(false, "ILLEGAL_PRODUCT_TYPE", null);
+            }
+
+            int qty = item.quantity();
+            BigDecimal unitPrice = product.price().setScale(2, RoundingMode.HALF_UP);
+            BigDecimal lineAmount = unitPrice.multiply(BigDecimal.valueOf(qty)).setScale(2, RoundingMode.HALF_UP);
+
+            resolvedItems.add(new ResolvedItem(item.productId(), qty, unitPrice, lineAmount));
+        }
+
+        // 2) 逐筆扣庫存（若中途失敗，這版先丟錯；後續可加 release 補償）
+        for (ResolvedItem item : resolvedItems) {
+            productClient.reserve(item.productId(), new ProductClient.ReserveRequest(item.quantity()));
+        }
+
+        // 3) 計算總金額並寫入訂單
+        BigDecimal totalAmount = resolvedItems.stream()
+                .map(ResolvedItem::lineAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        OrderEntity order = new OrderEntity(userId, totalAmount, "CREATED");
+        for (ResolvedItem item : resolvedItems) {
+            order.addItem(new OrderItemEntity(item.productId(), item.quantity(), item.unitPrice(), item.lineAmount()));
+        }
+
+        OrderEntity saved = orderRepository.save(order);
+        var resp = new OrderDtos.OrderResponse(
+                saved.getId(),
+                saved.getTotalAmount(),
+                saved.getStatus(),
+                saved.getItems().stream()
+                        .map(i -> new OrderDtos.OrderItemResponse(i.getProductId(), i.getQuantity(), i.getUnitPrice(), i.getLineAmount()))
+                        .toList()
+        );
+
+        return new OrderDtos.CreateOrderResult(true, "OK", resp);
+    }
+
+    private OrderDtos.CreateOrderResult validateRequest(OrderDtos.CreateNormalOrderRequest request) {
+        if (request == null || request.items() == null || request.items().isEmpty()) {
+            return new OrderDtos.CreateOrderResult(false, "BAD_REQUEST", null);
+        }
+        for (OrderDtos.CreateNormalOrderItem item : request.items()) {
+            if (item.productId() == null) {
+                return new OrderDtos.CreateOrderResult(false, "BAD_REQUEST", null);
+            }
+            if (item.quantity() == null || item.quantity() <= 0) {
+                return new OrderDtos.CreateOrderResult(false, "QTY_MUST_BE_POSITIVE", null);
+            }
+        }
+        return new OrderDtos.CreateOrderResult(false, "VALID_REQUEST", null);
+    }
+
+    private record ResolvedItem(Long productId, int quantity, BigDecimal unitPrice, BigDecimal lineAmount) {}
 
     @Transactional(readOnly = true)
     public List<OrderDtos.OrderResponse> listMyOrders(Long userId) {

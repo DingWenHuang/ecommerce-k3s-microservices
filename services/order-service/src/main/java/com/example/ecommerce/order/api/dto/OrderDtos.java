@@ -6,7 +6,6 @@ import java.util.List;
 /**
  * 下單 DTO：
  * - unitPrice 使用 BigDecimal（重要）
- * - demo 先支援單品下單（搶購場景）
  */
 public class OrderDtos {
 
@@ -31,4 +30,16 @@ public class OrderDtos {
     ) {}
 
     public record CreateOrderResult(boolean success, String message, OrderResponse order) {}
+
+    /**
+     * 一般商品多品項結帳請求
+     *
+     * items: 多個商品
+     */
+    public record CreateNormalOrderRequest(List<CreateNormalOrderItem> items){}
+
+    public record CreateNormalOrderItem(
+            Long productId,
+            Integer quantity
+    ) {}
 }
