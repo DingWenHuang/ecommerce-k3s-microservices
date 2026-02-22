@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 商品業務邏輯：
@@ -88,5 +89,30 @@ public class ProductService {
         ProductEntity p = repo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("商品不存在: " + id));
         return new ProductDtos.ProductResponse(p.getId(), p.getName(), p.getPrice(), p.getStock(), p.getProductType());
+    }
+
+    /**
+     * 搶購商品（FLASH_SALE）的扣庫存：一次限購 1
+     */
+    @Transactional
+    public ProductDtos.ReserveResponse reserveFlashSaleStock(long id, int amount) {
+        if (amount != 1) return new ProductDtos.ReserveResponse(false, "搶購商品數量需為1");
+
+        Optional<ProductEntity> productEntity = repo.findById(id);
+        if (productEntity.isEmpty()) {
+            return new ProductDtos.ReserveResponse(false, "商品不存在: " + id);
+        }
+
+        ProductEntity product = productEntity.get();
+        if (product.getProductType() != ProductType.FLASH_SALE) {
+            return new ProductDtos.ReserveResponse(false, "搶購功能僅限搶購類型商品");
+        }
+
+        int updated = repo.reserveStockAtomic(id, amount);
+        if (updated == 1) {
+           return new ProductDtos.ReserveResponse(true, "OK");
+        } else {
+            return new ProductDtos.ReserveResponse(false, "庫存不足");
+        }
     }
 }

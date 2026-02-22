@@ -28,23 +28,6 @@ public class OrderController {
         this.service = service;
     }
 
-    // TODO 這個方法會在下一步被修改為搶購邏輯，這邊先不改動
-    @PostMapping("/flash")
-    public ResponseEntity<?> create(Authentication authentication,
-                                    @RequestBody OrderDtos.CreateOrderRequest req) {
-        Long userId = Long.valueOf(authentication.getName());
-        var result = service.createOrder(userId, req);
-
-        if (result.success()) return ResponseEntity.ok(result.order());
-
-        // 這裡用較合理的 HTTP code
-        return switch (result.message()) {
-            case "OUT_OF_STOCK_OR_NOT_FOUND" -> ResponseEntity.status(HttpStatus.CONFLICT).body(result);
-            case "BUSY_TRY_AGAIN" -> ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(result);
-            default -> ResponseEntity.badRequest().body(result);
-        };
-    }
-
     @PostMapping("/normal")
     public ResponseEntity<?> createNormalOrder(Authentication authentication,
                                     @RequestBody OrderDtos.CreateNormalOrderRequest req) {

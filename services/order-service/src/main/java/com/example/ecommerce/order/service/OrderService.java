@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -37,57 +36,27 @@ public class OrderService {
         this.lockService = lockService;
     }
 
-    // TODO 這個方法會在下一步被修改為搶購邏輯，這邊先不改動
+    /**
+     * 搶購下單：單品項、單件
+     * - 由 FlashSale worker 呼叫
+     * - 金額由 product-service 查到的 price 決定（BigDecimal）
+     */
     @Transactional
-    public OrderDtos.CreateOrderResult createOrder(Long userId, OrderDtos.CreateOrderRequest req) {
-        if (req.productId() == null || req.quantity() == null || req.unitPrice() == null) {
-            return new OrderDtos.CreateOrderResult(false, "BAD_REQUEST", null);
-        }
-        if (req.quantity() <= 0) {
-            return new OrderDtos.CreateOrderResult(false, "QTY_MUST_BE_POSITIVE", null);
-        }
-        if (req.unitPrice().compareTo(BigDecimal.ZERO) < 0) {
-            return new OrderDtos.CreateOrderResult(false, "PRICE_INVALID", null);
+    public long createFlashSaleOrder(Long userId, Long productId) {
+        ProductClient.ProductInfo product = productClient.getProductInfo(productId);
+        if (!"FLASH_SALE".equals(product.productType())) {
+            throw new IllegalStateException("非搶購類型商品");
         }
 
-        String lockKey = "lock:product:" + req.productId();
-        String lockValue = lockService.tryLock(lockKey, Duration.ofSeconds(3));
-        if (lockValue == null) {
-            // 代表目前有其他人正在搶同一商品（demo 可回 429 或 409）
-            return new OrderDtos.CreateOrderResult(false, "BUSY_TRY_AGAIN", null);
-        }
+        BigDecimal unitPrice = product.price().setScale(2, RoundingMode.HALF_UP);
+        BigDecimal lineAmount = unitPrice; // quantity=1
+        BigDecimal totalAmount = lineAmount;
 
-        try {
-            // 1) 扣庫存（DB 原子）
-            ProductClient.ReserveResponse reserve = productClient.reserve(
-                    req.productId(),
-                    new ProductClient.ReserveRequest(req.quantity())
-            );
+        OrderEntity order = new OrderEntity(userId, totalAmount, "CREATED");
+        order.addItem(new OrderItemEntity(productId, 1, unitPrice, lineAmount));
 
-            if (!reserve.success()) {
-                return new OrderDtos.CreateOrderResult(false, reserve.message(), null);
-            }
-
-            // 2) 建立訂單（BigDecimal 計算）
-            BigDecimal lineAmount = req.unitPrice().multiply(BigDecimal.valueOf(req.quantity()));
-            OrderEntity order = new OrderEntity(userId, lineAmount, "CREATED");
-            order.addItem(new OrderItemEntity(req.productId(), req.quantity(), req.unitPrice(), lineAmount));
-
-            OrderEntity saved = orderRepository.save(order);
-
-            var resp = new OrderDtos.OrderResponse(
-                    saved.getId(),
-                    saved.getTotalAmount(),
-                    saved.getStatus(),
-                    saved.getItems().stream()
-                            .map(i -> new OrderDtos.OrderItemResponse(i.getProductId(), i.getQuantity(), i.getUnitPrice(), i.getLineAmount()))
-                            .toList()
-            );
-
-            return new OrderDtos.CreateOrderResult(true, "OK", resp);
-        } finally {
-            lockService.unlock(lockKey, lockValue);
-        }
+        OrderEntity saved = orderRepository.save(order);
+        return saved.getId();
     }
 
     @Transactional

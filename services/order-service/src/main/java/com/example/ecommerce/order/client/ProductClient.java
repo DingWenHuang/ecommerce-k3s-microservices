@@ -16,11 +16,15 @@ public interface ProductClient {
     record ReserveResponse(boolean success, String message) {}
     record ProductInfo(Long id, String name, BigDecimal price, Integer stock, String productType) {}
 
-    // 內部扣庫存
+    // 一般商品扣庫存
     @PostMapping("/internal/products/{id}/reserve")
     ReserveResponse reserve(@PathVariable("id") long id, @RequestBody ReserveRequest req);
 
     // 商品資訊
     @GetMapping("/internal/products/{id}")
     ProductInfo getProductInfo(@PathVariable("id") long id);
+
+    // 搶購商品扣庫存
+    @PostMapping("/internal/products/{id}/reserve-flash-sale")
+    ReserveResponse reserveFlashSale(@PathVariable("id") long id, @RequestBody ReserveRequest req);
 }

@@ -19,3 +19,9 @@ spring:
         master: ${REDIS_MASTER_SET:mymaster}
         nodes: ${REDIS_SERVICE_HOST:redis}:${REDIS_SENTINEL_PORT:26379}
         password: ${REDIS_PASSWORD}
+
+flashsale:
+  ticket-ttl-seconds: 15     # 斷線 15 秒視同離隊（可調）
+  result-ttl-seconds: 600    # 成功/售完結果保留 10 分鐘給前端看
+  worker:
+    poll-interval-ms: 30     # worker 輪詢間隔（降低 CPU）

@@ -13,6 +13,10 @@ spring:
   cloud:
     gateway:
       routes:
+        - id: order-flashsale
+          uri: http://order-service:8080
+          predicates:
+            - Path=/flashsale/**
         - id: orders
           uri: http://order-service:8080
           predicates:

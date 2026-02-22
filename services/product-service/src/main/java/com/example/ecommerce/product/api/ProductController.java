@@ -64,4 +64,9 @@ public class ProductController {
     public ResponseEntity<ProductDtos.ProductResponse> getProductInfo(@PathVariable("id") long id) {
         return ResponseEntity.ok(service.getProductInfo(id));
     }
+
+    @PostMapping("/internal/products/{id}/reserve-flash-sale")
+    public ResponseEntity<ProductDtos.ReserveResponse> reserveFlashSale(@PathVariable("id") long id, @RequestBody ProductDtos.ReserveRequest req) {
+        return ResponseEntity.ok((service.reserveFlashSaleStock(id, req.amount())));
+    }
 }
