@@ -55,7 +55,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     const value = useMemo<CartContextValue>(() => ({
         ...state,
-        addToCart: (product) => dispatch({ type: "ADD", product }),
+        addToCart: (product) => {
+            if (product.productType === "FLASH_SALE") {
+                // 搶購商品不進購物車，走排隊流程
+                return;
+            }
+            dispatch({ type: "ADD", product })
+        },
         removeFromCart: (productId) => dispatch({ type: "REMOVE", productId }),
         setQuantity: (productId, quantity) => dispatch({ type: "SET_QTY", productId, quantity }),
         clearCart: () => dispatch({ type: "CLEAR" }),

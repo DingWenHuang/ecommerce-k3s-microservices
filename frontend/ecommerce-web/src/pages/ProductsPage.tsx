@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Card, Col, Divider, Row, Skeleton, Statistic, Tag, Typography } from "antd";
+import { Alert, Button, Card, Col, Divider, Modal, Row, Skeleton, Statistic, Tag, Typography } from "antd";
 import { ShoppingCartOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { fetchProductsByType, type Product } from "../api/productApi";
+import { joinFlashSale, getFlashSaleTicketStatus } from "../api/flashSaleApi";
 import { toErrorMessage } from "../api/apiClient";
 import { useCart } from "../cart/CartContext";
 import { useAuth } from "../auth/AuthContext";
@@ -10,14 +11,22 @@ const { Title, Text } = Typography;
 
 /**
  * 商品頁：
- * - 一般商品（NORMAL）：可加入購物車（Step 15 會支援多品項結帳）
- * - 搶購商品（FLASH_SALE）：先做 UI 區隔；Step 16 才做排隊 join / 狀態輪詢
+ * - NORMAL：加入購物車 → 多品項結帳
+ * - FLASH_SALE：join queue → polling status → success 顯示 orderId
  */
 export function ProductsPage() {
     const [normalProducts, setNormalProducts] = useState<Product[]>([]);
     const [flashSaleProducts, setFlashSaleProducts] = useState<Product[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+
+    // 搶購狀態 UI
+    const [isFlashModalOpen, setIsFlashModalOpen] = useState(false);
+    const [flashTicketId, setFlashTicketId] = useState<string | null>(null);
+    const [flashStatusText, setFlashStatusText] = useState<string>("尚未加入隊列");
+    const [flashOrderId, setFlashOrderId] = useState<number | null>(null);
+    const [flashPosition, setFlashPosition] = useState<number | null>(null);
+    const [flashSelectedProduct, setFlashSelectedProduct] = useState<Product | null>(null);
 
     const cart = useCart();
     const auth = useAuth();
@@ -42,21 +51,93 @@ export function ProductsPage() {
         load();
     }, []);
 
+    async function reloadFlashSaleProducts() {
+        try {
+            const flash = await fetchProductsByType("FLASH_SALE");
+            setFlashSaleProducts(flash);
+
+            if (flashSelectedProduct) {
+                const updated = flash.find((x) => x.id === flashSelectedProduct.id);
+                if (updated) setFlashSelectedProduct(updated);
+            }
+        } catch (e) {
+            // 不要蓋掉成功訊息，只記錄在 console
+            console.error(e);
+        }
+    }
+
+    // polling：每 1 秒查一次狀態，視同心跳（刷新 TTL）
+    useEffect(() => {
+        if (!flashTicketId) return;
+
+        let timerId: number | null = null;
+        let stopped = false;
+
+        async function poll() {
+            if (stopped) return;
+            try {
+                const status = await getFlashSaleTicketStatus(flashTicketId as string);
+                setFlashPosition(status.position);
+                setFlashOrderId(status.orderId);
+
+                if (status.status === "QUEUED") setFlashStatusText(`排隊中... 目前順位：${status.position ?? "?"}`);
+                if (status.status === "PROCESSING") setFlashStatusText("處理中，請稍候...");
+                if (status.status === "SUCCESS") setFlashStatusText(`✅ 搶購成功！Order #${status.orderId}`);
+                if (status.status === "SOLD_OUT") setFlashStatusText("❌ 已售罄");
+                if (status.status === "EXPIRED") setFlashStatusText("⏳ 已離隊（可能離線太久），請重新加入");
+
+                // 成功/售完/過期就停止輪詢
+                if (status.status === "SUCCESS" || status.status === "SOLD_OUT" || status.status === "EXPIRED") {
+                    await reloadFlashSaleProducts(); // 刷新商品更新庫存
+                    return;
+                }
+
+                timerId = window.setTimeout(poll, 1000);
+            } catch (e) {
+                setFlashStatusText(`查詢狀態失敗：${toErrorMessage(e)}`);
+                timerId = window.setTimeout(poll, 1500);
+            }
+        }
+
+        poll();
+
+        return () => {
+            stopped = true;
+            if (timerId) window.clearTimeout(timerId);
+        };
+    }, [flashTicketId]);
+
+    async function startFlashSale(product: Product) {
+        setFlashSelectedProduct(product);
+        setIsFlashModalOpen(true);
+        setFlashTicketId(null);
+        setFlashOrderId(null);
+        setFlashPosition(null);
+        setFlashStatusText("準備加入隊列...");
+
+        try {
+            const join = await joinFlashSale(product.id);
+            setFlashTicketId(join.ticketId);
+            setFlashStatusText("已加入隊列，正在取得狀態...");
+        } catch (e) {
+            setFlashStatusText(`加入隊列失敗：${toErrorMessage(e)}`);
+        }
+    }
+
     return (
         <div>
             <Title level={3} style={{ marginTop: 0 }}>商品</Title>
             <Text type="secondary">
-                一般商品支援多品項結帳（下一步會完成）；搶購商品將走排隊與限購流程（下一步會完成）。
+                一般商品支援多品項結帳；搶購商品採 FIFO 排隊 + 斷線離隊（輪詢=心跳）。
             </Text>
 
             <div style={{ height: 16 }} />
-
             {error && <Alert type="error" message={error} showIcon style={{ marginBottom: 12 }} />}
             {isLoading && <Skeleton active />}
 
             {!isLoading && (
                 <>
-                    <SectionTitle icon={<ShoppingCartOutlined />} title="一般商品區" subtitle="可加入購物車，支援多品項結帳" />
+                    <SectionTitle icon={<ShoppingCartOutlined />} title="一般商品區" subtitle="可加入購物車，多品項結帳" />
                     <Row gutter={[12, 12]}>
                         {normalProducts.map((p) => (
                             <Col key={p.id} xs={24} sm={12} md={8}>
@@ -85,7 +166,7 @@ export function ProductsPage() {
 
                     <Divider style={{ margin: "24px 0" }} />
 
-                    <SectionTitle icon={<ThunderboltOutlined />} title="限量搶購區" subtitle="一次只能買一種且限購 1（下一步加入排隊購買）" />
+                    <SectionTitle icon={<ThunderboltOutlined />} title="限量搶購區" subtitle="單品項＋單件（排隊處理）" />
                     <Row gutter={[12, 12]}>
                         {flashSaleProducts.map((p) => (
                             <Col key={p.id} xs={24} sm={12} md={8}>
@@ -98,12 +179,9 @@ export function ProductsPage() {
                                             danger
                                             icon={<ThunderboltOutlined />}
                                             disabled={!auth.accessToken || p.stock <= 0}
-                                            onClick={() => {
-                                                // Step 16 會改成 join queue + 顯示排隊狀態
-                                                alert("下一步（Step 16）會新增：排隊搶購 join + status。現在先完成商品分區。");
-                                            }}
+                                            onClick={() => startFlashSale(p)}
                                         >
-                                            進入搶購
+                                            排隊搶購
                                         </Button>,
                                     ]}
                                 >
@@ -118,6 +196,24 @@ export function ProductsPage() {
                     </Row>
                 </>
             )}
+
+            <Modal
+                title={`搶購排隊：${flashSelectedProduct?.name ?? ""}`}
+                open={isFlashModalOpen}
+                onCancel={() => setIsFlashModalOpen(false)}
+                footer={null}
+            >
+                <div style={{ display: "grid", gap: 8 }}>
+                    <div><strong>狀態：</strong>{flashStatusText}</div>
+                    {flashTicketId && <div><strong>Ticket：</strong>{flashTicketId}</div>}
+                    {flashPosition && <div><strong>順位：</strong>{flashPosition}</div>}
+                    {flashOrderId && <div><strong>OrderId：</strong>{flashOrderId}</div>}
+
+                    <div style={{ color: "#888" }}>
+                        提示：保持此視窗開著會持續輪詢（視同心跳）。關閉或離線超過 TTL 會自動離隊。
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 }
