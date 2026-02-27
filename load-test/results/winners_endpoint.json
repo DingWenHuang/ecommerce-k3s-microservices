@@ -1,0 +1,89 @@
+{
+  "productId": 1,
+  "successCount": 10,
+  "limit": 50,
+  "sinceSeconds": 300,
+  "enqueueSeqNonDecreasingInFirstN": true,
+  "winners": [
+    {
+      "ticketId": "604ae6fb-3749-48d2-91fa-3d76cb87884e",
+      "userId": 171,
+      "productId": 1,
+      "enqueueSeq": 2001,
+      "successSeq": 1401,
+      "orderId": 1507
+    },
+    {
+      "ticketId": "a4583855-b5d5-451a-adbc-98d842d42279",
+      "userId": 132,
+      "productId": 1,
+      "enqueueSeq": 2002,
+      "successSeq": 1402,
+      "orderId": 1508
+    },
+    {
+      "ticketId": "8afa96cd-8230-4b9a-b368-38a8fb4c42bd",
+      "userId": 180,
+      "productId": 1,
+      "enqueueSeq": 2003,
+      "successSeq": 1403,
+      "orderId": 1509
+    },
+    {
+      "ticketId": "6d29aad9-5a5c-4b30-bf62-1a0375ddf786",
+      "userId": 139,
+      "productId": 1,
+      "enqueueSeq": 2004,
+      "successSeq": 1404,
+      "orderId": 1510
+    },
+    {
+      "ticketId": "88373c62-327e-416d-bc32-b97050ac4a78",
+      "userId": 199,
+      "productId": 1,
+      "enqueueSeq": 2005,
+      "successSeq": 1405,
+      "orderId": 1511
+    },
+    {
+      "ticketId": "8c75abff-5414-4714-ae29-7194044c00ee",
+      "userId": 131,
+      "productId": 1,
+      "enqueueSeq": 2006,
+      "successSeq": 1406,
+      "orderId": 1512
+    },
+    {
+      "ticketId": "e21169ae-304f-4787-828a-f5f90bdf957a",
+      "userId": 138,
+      "productId": 1,
+      "enqueueSeq": 2007,
+      "successSeq": 1407,
+      "orderId": 1513
+    },
+    {
+      "ticketId": "fc9c5524-7d13-4ac4-a574-dc860fb95cec",
+      "userId": 155,
+      "productId": 1,
+      "enqueueSeq": 2008,
+      "successSeq": 1408,
+      "orderId": 1514
+    },
+    {
+      "ticketId": "a9da8bf6-25c4-4462-b921-71e55cc3b954",
+      "userId": 151,
+      "productId": 1,
+      "enqueueSeq": 2009,
+      "successSeq": 1409,
+      "orderId": 1515
+    },
+    {
+      "ticketId": "5b0c624c-d3c7-4c52-be6a-7de83ba5431b",
+      "userId": 148,
+      "productId": 1,
+      "enqueueSeq": 2010,
+      "successSeq": 1410,
+      "orderId": 1516
+    }
+  ]
+}
