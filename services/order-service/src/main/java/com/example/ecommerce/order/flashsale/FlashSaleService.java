@@ -26,7 +26,7 @@ public class FlashSaleService {
             FlashSaleRedisRepository redisRepository,
             ProductClient productClient,
             OrderService orderService,
-            @Value("${flashsale.ticket-ttl-seconds:15}") long ticketTtlSeconds,
+            @Value("${flashsale.ticket-ttl-seconds:60}") long ticketTtlSeconds,
             @Value("${flashsale.result-ttl-seconds:600}") long resultTtlSeconds
     ) {
         this.redisRepository = redisRepository;
@@ -46,14 +46,24 @@ public class FlashSaleService {
         // 2) 若使用者已在隊列中（active），回傳既有 ticketId（避免重複排隊）
         var existing = redisRepository.getActiveTicket(productId, userId);
         if (existing.isPresent()) {
+            String existingTicketId = existing.get();
+
             // 仍刷新 active TTL（表示仍在線/仍想排隊）
             redisRepository.setActiveTicket(productId, userId, existing.get(), ticketTtl);
-            return new FlashSaleDtos.JoinResponse(existing.get());
+
+            // 補回 enqueueSeq（從 ticket hash 讀）
+            Long enqueueSeq = null;
+            if (redisRepository.ticketExists(existingTicketId)) {
+                Map<Object, Object> t = redisRepository.getTicket(existingTicketId);
+                Object v = t.get("enqueueSeq");
+                if (v != null) enqueueSeq = Long.parseLong(String.valueOf(v));
+            }
+
+            return new FlashSaleDtos.JoinResponse(existingTicketId, enqueueSeq);
         }
 
-        // 3) 建立新 ticket
+        // 3) 建立新 ticket（先建 hash，worker 依此確認 ticket 存在）
         String ticketId = UUID.randomUUID().toString();
-
         redisRepository.createTicket(ticketId, Map.of(
                 "ticketId", ticketId,
                 "userId", String.valueOf(userId),
@@ -65,16 +75,20 @@ public class FlashSaleService {
         // 4) 標記 active（避免同一 user 重複 join），TTL = ticketTtl
         redisRepository.setActiveTicket(productId, userId, ticketId, ticketTtl);
 
-        // 5) 入隊 FIFO
-        redisRepository.enqueue(productId, ticketId);
+        // 5) 原子入隊：Lua 腳本一次完成 INCR(enqueueSeq) + RPUSH(queue)
+        //    保證 seq 遞增順序 == Redis List 插入順序，FIFO 不再有競態
+        long enqueueSeq = redisRepository.atomicEnqueueAndGetSeq(productId, ticketId);
 
-        return new FlashSaleDtos.JoinResponse(ticketId);
+        // 6) 將確定的 enqueueSeq 寫回 ticket hash（供 evidence 查詢）
+        redisRepository.updateTicket(ticketId, Map.of("enqueueSeq", String.valueOf(enqueueSeq)));
+
+        return new FlashSaleDtos.JoinResponse(ticketId, enqueueSeq);
     }
 
     public FlashSaleDtos.TicketStatusResponse getTicketStatus(String ticketId) {
         // ticket 不存在 → EXPIRED（離線/TTL 到期）
         if (!redisRepository.ticketExists(ticketId)) {
-            return new FlashSaleDtos.TicketStatusResponse(ticketId, null, FlashSaleTicketStatus.EXPIRED.name(), null, null);
+            return new FlashSaleDtos.TicketStatusResponse(ticketId, null, FlashSaleTicketStatus.EXPIRED.name(), null, null, null, null);
         }
 
         Map<Object, Object> map = redisRepository.getTicket(ticketId);
@@ -82,6 +96,8 @@ public class FlashSaleService {
         long productId = Long.parseLong(String.valueOf(map.get("productId")));
         long userId = Long.parseLong(String.valueOf(map.get("userId")));
         String status = String.valueOf(map.get("status"));
+        Long enqueueSeq = map.get("enqueueSeq") == null ? null : Long.parseLong(String.valueOf(map.get("enqueueSeq")));
+        Long successSeq = map.get("successSeq") == null ? null : Long.parseLong(String.valueOf(map.get("successSeq")));
 
         // 重要：輪詢視同心跳，刷新 TTL（讓「離線離隊」成立）
         redisRepository.refreshTicketTtl(ticketId, ticketTtl);
@@ -95,7 +111,27 @@ public class FlashSaleService {
             position = redisRepository.findPosition(productId, ticketId, 5000);
         }
 
-        return new FlashSaleDtos.TicketStatusResponse(ticketId, productId, status, position, orderId);
+        return new FlashSaleDtos.TicketStatusResponse(ticketId, productId, status, position, orderId, enqueueSeq, successSeq);
+    }
+
+    /**
+     * worker 取出隊頭後呼叫：先延長 ticket 存活，避免處理中途過期
+     */
+    public void extendTicketForProcessing(String ticketId) {
+        // 這裡用 resultTtl 當處理保護時間
+        redisRepository.refreshTicketTtl(ticketId, resultTtl);
+    }
+
+    /**
+     * worker 出隊時呼叫：把 FIFO 出隊順序寫到 successSeq
+     * 這樣 evidence 用 successSeq 排序時，順序會貼近 FIFO。
+     */
+    public void markDequeued(String ticketId, long dequeueSeq) {
+        // 不改狀態，避免影響 processTicket 的 QUEUED 判斷
+        // 只寫 successSeq 作為「處理順序證據」
+        redisRepository.updateTicket(ticketId, Map.of(
+                "successSeq", String.valueOf(dequeueSeq)
+        ));
     }
 
     /**
@@ -105,11 +141,24 @@ public class FlashSaleService {
      */
     @Transactional
     public void processTicket(String ticketId) {
-        Map<Object, Object> map = redisRepository.getTicket(ticketId);
-        long productId = Long.parseLong(String.valueOf(map.get("productId")));
-        long userId = Long.parseLong(String.valueOf(map.get("userId")));
+        // 票不存在就算了（可能剛好過期/被清）
+        if (!redisRepository.ticketExists(ticketId)) return;
 
-        // 如果 ticket 已經不是 QUEUED（例如重複處理），直接跳過
+        Map<Object, Object> map = redisRepository.getTicket(ticketId);
+        if (map == null || map.isEmpty()) return;
+
+        // 這些欄位若缺失，代表票曾過期重建或資料不完整 → 直接標 ERROR 並結束
+        Object pidObj = map.get("productId");
+        Object uidObj = map.get("userId");
+        if (pidObj == null || uidObj == null) {
+            redisRepository.updateTicket(ticketId, Map.of("status", FlashSaleTicketStatus.ERROR.name()));
+            redisRepository.setResultTtl(ticketId, resultTtl);
+            return;
+        }
+
+        long productId = Long.parseLong(String.valueOf(pidObj));
+        long userId = Long.parseLong(String.valueOf(uidObj));
+
         String status = String.valueOf(map.get("status"));
         if (!FlashSaleTicketStatus.QUEUED.name().equals(status)) {
             return;
@@ -120,21 +169,28 @@ public class FlashSaleService {
 
         try {
             // 1) 扣庫存（FLASH_SALE 專用 endpoint，一次只能扣 1）
-            productClient.reserveFlashSale(productId, new ProductClient.ReserveRequest(1));
+            ProductClient.ReserveResponse reserveResponse = productClient.reserveFlashSale(productId, new ProductClient.ReserveRequest(1));
 
-            // 2) 建立搶購訂單（單品項、單件）
-            long orderId = orderService.createFlashSaleOrder(userId, productId);
+            if (reserveResponse.success()) {
+                // 2) 建立搶購訂單（單品項、單件）
+                long orderId = orderService.createFlashSaleOrder(userId, productId);
 
-            redisRepository.updateTicket(ticketId, Map.of(
-                    "status", FlashSaleTicketStatus.SUCCESS.name(),
-                    "orderId", String.valueOf(orderId)
-            ));
+                // successSeq 已經在出隊時寫入 dequeueSeq 了
+                // 這裡不要再 nextSuccessSeq，避免被 DB 延遲打亂 FIFO 證據
+                redisRepository.updateTicket(ticketId, Map.of(
+                        "status", FlashSaleTicketStatus.SUCCESS.name(),
+                        "orderId", String.valueOf(orderId)
+                ));
 
-            // 成功結果保留一段時間，讓前端可看到 orderId
-            redisRepository.setResultTtl(ticketId, resultTtl);
+                redisRepository.setResultTtl(ticketId, resultTtl);
+            } else {
+                redisRepository.updateTicket(ticketId, Map.of("status", FlashSaleTicketStatus.SOLD_OUT.name()
+                ));
+                redisRepository.setResultTtl(ticketId, resultTtl);
+            }
         } catch (Exception e) {
             // 庫存不足或其他錯誤 → SOLD_OUT（demo 先統一）
-            redisRepository.updateTicket(ticketId, Map.of("status", FlashSaleTicketStatus.SOLD_OUT.name()));
+            redisRepository.updateTicket(ticketId, Map.of("status", FlashSaleTicketStatus.ERROR.name()));
             redisRepository.setResultTtl(ticketId, resultTtl);
         } finally {
             // 無論成功或售完，都讓使用者可以重新 join（不再 active）

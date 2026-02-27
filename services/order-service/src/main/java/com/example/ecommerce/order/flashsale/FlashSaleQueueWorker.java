@@ -7,13 +7,6 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.util.UUID;
 
-/**
- * 簡化版 worker：
- * - 每次 tick 嘗試處理「所有可能的 FLASH_SALE 商品隊列」
- *
- * demo 的前提：你搶購商品通常不多（1~數個），所以可以用掃描方式。
- * 若商品很多，應改成「有 join 時把 productId 放到 activeProducts set」，worker 只處理 set 中的 id。
- */
 @Component
 public class FlashSaleQueueWorker {
 
@@ -32,10 +25,6 @@ public class FlashSaleQueueWorker {
         this.pollIntervalMs = pollIntervalMs;
     }
 
-    /**
-     * worker tick：
-     * - demo 版先處理 productId=1 的搶購商品（目前 Flash Sale Ticket 就是 id=1）
-     */
     @Scheduled(fixedDelayString = "${flashsale.worker.poll-interval-ms:30}")
     public void tick() {
         long productId = 1L; // demo：先固定處理一個搶購商品
@@ -47,24 +36,37 @@ public class FlashSaleQueueWorker {
         boolean locked = redisRepository.tryLock(productId, lockValue, Duration.ofSeconds(2));
         if (!locked) return;
 
-        try {
-            // 一次只處理一張票（避免長時間佔鎖）
-            String headTicketId = redisRepository.peekQueueHead(productId);
-            if (headTicketId == null) return;
+        String ticketId = null;
+        long dequeueSeq = 0L;
 
-            // ticket 若已過期（離線離隊）→ 直接丟棄
-            if (!redisRepository.ticketExists(headTicketId)) {
-                redisRepository.popQueueHead(productId);
+        try {
+            ticketId = redisRepository.popQueueHead(productId);
+            if (ticketId == null) return;
+
+            // 這張票拿到「出隊順序」：用來做 FIFO 證據
+            dequeueSeq = redisRepository.nextDequeueSeq(productId);
+
+            // 如果 ticket 已不存在（離線/TTL到）：
+            // - 既然已出隊，就直接丟棄即可（這張不算成功）
+            if (!redisRepository.ticketExists(ticketId)) {
                 return;
             }
 
-            // 真的處理：扣庫存 + 建單 + 更新狀態
-            flashSaleService.processTicket(headTicketId);
+            // 先把 ticket TTL 延長，避免處理中途過期導致 hash 欄位丟失
+            //（用 resultTtl 或你想要的保留時間，這裡交給 service 決定更好）
+            flashSaleService.extendTicketForProcessing(ticketId);
 
-            // 成功或售完，都把隊頭移除（下一輪處理下一位）
-            redisRepository.popQueueHead(productId);
+            // 先寫入 successSeq（其實是 dequeue seq）
+            // 這樣 winners 以 successSeq 排時，順序會反映 FIFO 出隊順序
+            flashSaleService.markDequeued(ticketId, dequeueSeq);
+
         } finally {
             redisRepository.unlock(productId, lockValue);
+        }
+
+        // 鎖外處理：reserve + 建單（慢的事情在鎖外做）
+        if (ticketId != null && redisRepository.ticketExists(ticketId)) {
+            flashSaleService.processTicket(ticketId);
         }
     }
 }

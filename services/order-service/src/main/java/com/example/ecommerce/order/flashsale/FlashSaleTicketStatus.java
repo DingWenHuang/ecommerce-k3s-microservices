@@ -8,5 +8,6 @@ public enum FlashSaleTicketStatus {
     PROCESSING,
     SUCCESS,
     SOLD_OUT,
-    EXPIRED
+    EXPIRED,
+    ERROR
 }

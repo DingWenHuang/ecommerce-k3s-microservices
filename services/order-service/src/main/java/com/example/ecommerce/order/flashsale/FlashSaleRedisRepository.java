@@ -1,9 +1,11 @@
 package com.example.ecommerce.order.flashsale;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Repository;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -11,6 +13,33 @@ import java.util.Optional;
 public class FlashSaleRedisRepository {
 
     private final StringRedisTemplate redis;
+
+    // compare-and-del Lua：只有 value 相同才刪除
+    private static final DefaultRedisScript<Long> UNLOCK_SCRIPT = new DefaultRedisScript<>(
+            """
+            if redis.call('get', KEYS[1]) == ARGV[1] then
+              return redis.call('del', KEYS[1])
+            else
+              return 0
+            end
+            """,
+            Long.class
+    );
+
+    /**
+     * 原子入隊腳本：同一個 Lua 事務內完成 INCR + RPUSH。
+     * 保證 enqueueSeq 的遞增順序嚴格等同於 Redis List 的插入順序，避免競態導致 FIFO 失效。
+     * KEYS[1] = enqueue-seq key, KEYS[2] = queue key
+     * ARGV[1] = ticketId
+     */
+    private static final DefaultRedisScript<Long> ENQUEUE_SCRIPT = new DefaultRedisScript<>(
+            """
+            local seq = redis.call('INCR', KEYS[1])
+            redis.call('RPUSH', KEYS[2], ARGV[1])
+            return seq
+            """,
+            Long.class
+    );
 
     public FlashSaleRedisRepository(StringRedisTemplate redis) {
         this.redis = redis;
@@ -30,6 +59,22 @@ public class FlashSaleRedisRepository {
 
     public String lockKey(long productId) {
         return "flash:lock:" + productId;
+    }
+
+    /**
+     * 原子操作：同時分配 enqueueSeq 並將 ticketId 推入隊列尾端。
+     * 使用 Lua 腳本保證兩個操作不可分割，解決競態條件下 enqueueSeq 與實際入隊順序不一致的問題。
+     */
+    public long atomicEnqueueAndGetSeq(long productId, String ticketId) {
+        String seqKey = "flash:enqueue-seq:" + productId;
+        Long seq = redis.execute(ENQUEUE_SCRIPT, List.of(seqKey, queueKey(productId)), ticketId);
+        return seq == null ? 0L : seq;
+    }
+
+    public long nextDequeueSeq(long productId) {
+        String key = "flash:dequeue-seq:" + productId;
+        Long v = redis.opsForValue().increment(key);
+        return v == null ? 0L : v;
     }
 
     // ===== Active（避免同一 user 重複 join）=====
@@ -74,13 +119,6 @@ public class FlashSaleRedisRepository {
     }
 
     // ===== Queue =====
-    public void enqueue(long productId, String ticketId) {
-        redis.opsForList().rightPush(queueKey(productId), ticketId);
-    }
-
-    public String peekQueueHead(long productId) {
-        return redis.opsForList().index(queueKey(productId), 0);
-    }
 
     public String popQueueHead(long productId) {
         return redis.opsForList().leftPop(queueKey(productId));
@@ -106,7 +144,6 @@ public class FlashSaleRedisRepository {
     }
 
     public void unlock(long productId, String lockValue) {
-        // 簡化版：demo 不做 Lua compare-and-del，worker TTL 很短可接受
-        redis.delete(lockKey(productId));
+        redis.execute(UNLOCK_SCRIPT, List.of(lockKey(productId)), lockValue);
     }
 }

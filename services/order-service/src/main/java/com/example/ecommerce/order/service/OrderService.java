@@ -4,7 +4,6 @@ import com.example.ecommerce.order.api.dto.OrderDtos;
 import com.example.ecommerce.order.client.ProductClient;
 import com.example.ecommerce.order.domain.OrderEntity;
 import com.example.ecommerce.order.domain.OrderItemEntity;
-import com.example.ecommerce.order.redis.RedisLockService;
 import com.example.ecommerce.order.repo.OrderRepository;
 
 import org.springframework.stereotype.Service;
@@ -26,14 +25,11 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final ProductClient productClient;
-    private final RedisLockService lockService;
 
     public OrderService(OrderRepository orderRepository,
-                        ProductClient productClient,
-                        RedisLockService lockService) {
+                        ProductClient productClient) {
         this.orderRepository = orderRepository;
         this.productClient = productClient;
-        this.lockService = lockService;
     }
 
     /**
