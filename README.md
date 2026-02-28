@@ -1,7 +1,7 @@
 ## 前端入口
 
-- 前端（React）：http://shop.localtest.me
-- 後端 API（Gateway）：http://api.localtest.me
+- 前端（React）：https://shop.dingwenhuang.com
+- 後端 API（Gateway）：https://api.dingwenhuang.com
 
 ### 角色
 - USER：可瀏覽商品、加入購物車、下單、查訂單

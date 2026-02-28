@@ -8,7 +8,7 @@ metadata:
     # traefik 通常可不加也能運作
 spec:
   rules:
-    - host: api.localtest.me
+    - host: api.dingwenhuang.com
       http:
         paths:
           - path: /
