@@ -142,7 +142,7 @@ export function ProductsPage() {
                         {normalProducts.map((p) => (
                             <Col key={p.id} xs={24} sm={12} md={8}>
                                 <Card
-                                    title={<span>{p.name} <Tag color="blue">NORMAL</Tag></span>}
+                                    title={<span style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>{p.name}<Tag color="blue">NORMAL</Tag></span>}
                                     actions={[
                                         <Button
                                             key="add"
@@ -171,7 +171,7 @@ export function ProductsPage() {
                         {flashSaleProducts.map((p) => (
                             <Col key={p.id} xs={24} sm={12} md={8}>
                                 <Card
-                                    title={<span>{p.name} <Tag color="red">FLASH_SALE</Tag></span>}
+                                    title={<span style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>{p.name}<Tag color="red">FLASH_SALE</Tag></span>}
                                     actions={[
                                         <Button
                                             key="flash"
