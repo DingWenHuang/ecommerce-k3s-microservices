@@ -17,14 +17,18 @@ type OrderRow = {
 export function OrdersPage() {
     const [orders, setOrders] = useState<Order[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         async function load() {
             setError(null);
+            setIsLoading(true);
             try {
                 setOrders(await fetchMyOrders());
             } catch (e) {
                 setError(toErrorMessage(e));
+            } finally {
+                setIsLoading(false);
             }
         }
         load();
@@ -57,7 +61,7 @@ export function OrdersPage() {
             {error && <Alert type="error" message={error} showIcon style={{ marginBottom: 12 }} />}
 
             <Card>
-                <Table columns={columns} dataSource={rows} />
+                <Table columns={columns} dataSource={rows} loading={isLoading} />
             </Card>
         </div>
     );
