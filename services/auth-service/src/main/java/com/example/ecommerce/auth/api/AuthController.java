@@ -3,9 +3,12 @@ package com.example.ecommerce.auth.api;
 import com.example.ecommerce.auth.api.dto.AuthDtos;
 import com.example.ecommerce.auth.service.AuthService;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 /**
  * auth API：
@@ -38,5 +41,10 @@ public class AuthController {
     public ResponseEntity<AuthDtos.MeResponse> me(Authentication authentication) {
         // authentication.getName() 會是 JwtAuthFilter 放入的 username
         return ResponseEntity.ok(authService.me(authentication.getName()));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> handleIllegalArgument(IllegalArgumentException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", e.getMessage()));
     }
 }

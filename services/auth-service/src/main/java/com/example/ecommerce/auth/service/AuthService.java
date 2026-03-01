@@ -36,7 +36,7 @@ public class AuthService {
             throw new IllegalArgumentException("username/password 不可為空");
         }
         if (userRepository.existsByUsername(req.username())) {
-            throw new IllegalArgumentException("使用者已存在");
+            throw new IllegalArgumentException("帳號名稱「" + req.username() + "」已被使用，請選擇其他名稱");
         }
 
         String hash = passwordEncoder.encode(req.password());
