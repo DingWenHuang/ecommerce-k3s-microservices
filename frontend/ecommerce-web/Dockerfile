@@ -9,6 +9,10 @@ RUN npm ci
 # copy source
 COPY . .
 
+# 接收 Jenkins build arg
+ARG VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+
 # 使用 production env build
 RUN npm run build
 
