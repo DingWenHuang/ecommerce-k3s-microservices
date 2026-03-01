@@ -25,6 +25,9 @@ public class OrderItemEntity {
     @Column(nullable=false)
     private Long productId;
 
+    @Column(nullable=true, length = 255)
+    private String productName;
+
     @Column(nullable=false)
     private Integer quantity;
 
@@ -36,8 +39,9 @@ public class OrderItemEntity {
 
     public OrderItemEntity() {}
 
-    public OrderItemEntity(Long productId, Integer quantity, BigDecimal unitPrice, BigDecimal lineAmount) {
+    public OrderItemEntity(Long productId, String productName, Integer quantity, BigDecimal unitPrice, BigDecimal lineAmount) {
         this.productId = productId;
+        this.productName = productName;
         this.quantity = quantity;
         this.unitPrice = unitPrice;
         this.lineAmount = lineAmount;
@@ -46,6 +50,7 @@ public class OrderItemEntity {
     public Long getId() { return id; }
     public OrderEntity getOrder() { return order; }
     public Long getProductId() { return productId; }
+    public String getProductName() { return productName; }
     public Integer getQuantity() { return quantity; }
     public BigDecimal getUnitPrice() { return unitPrice; }
     public BigDecimal getLineAmount() { return lineAmount; }
@@ -53,6 +58,7 @@ public class OrderItemEntity {
     public void setId(Long id) { this.id = id; }
     public void setOrder(OrderEntity order) { this.order = order; }
     public void setProductId(Long productId) { this.productId = productId; }
+    public void setProductName(String productName) { this.productName = productName; }
     public void setQuantity(Integer quantity) { this.quantity = quantity; }
     public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
     public void setLineAmount(BigDecimal lineAmount) { this.lineAmount = lineAmount; }

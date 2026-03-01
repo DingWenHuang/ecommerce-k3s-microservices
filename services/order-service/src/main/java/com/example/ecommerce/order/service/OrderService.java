@@ -49,7 +49,7 @@ public class OrderService {
         BigDecimal totalAmount = lineAmount;
 
         OrderEntity order = new OrderEntity(userId, totalAmount, "CREATED");
-        order.addItem(new OrderItemEntity(productId, 1, unitPrice, lineAmount));
+        order.addItem(new OrderItemEntity(productId, product.name(), 1, unitPrice, lineAmount));
 
         OrderEntity saved = orderRepository.save(order);
         return saved.getId();
@@ -75,7 +75,7 @@ public class OrderService {
             BigDecimal unitPrice = product.price().setScale(2, RoundingMode.HALF_UP);
             BigDecimal lineAmount = unitPrice.multiply(BigDecimal.valueOf(qty)).setScale(2, RoundingMode.HALF_UP);
 
-            resolvedItems.add(new ResolvedItem(item.productId(), qty, unitPrice, lineAmount));
+            resolvedItems.add(new ResolvedItem(item.productId(), product.name(), qty, unitPrice, lineAmount));
         }
 
         // 2) 逐筆扣庫存（若中途失敗，這版先丟錯；後續可加 release 補償）
@@ -91,7 +91,7 @@ public class OrderService {
 
         OrderEntity order = new OrderEntity(userId, totalAmount, "CREATED");
         for (ResolvedItem item : resolvedItems) {
-            order.addItem(new OrderItemEntity(item.productId(), item.quantity(), item.unitPrice(), item.lineAmount()));
+            order.addItem(new OrderItemEntity(item.productId(), item.productName(), item.quantity(), item.unitPrice(), item.lineAmount()));
         }
 
         OrderEntity saved = orderRepository.save(order);
@@ -100,7 +100,7 @@ public class OrderService {
                 saved.getTotalAmount(),
                 saved.getStatus(),
                 saved.getItems().stream()
-                        .map(i -> new OrderDtos.OrderItemResponse(i.getProductId(), i.getQuantity(), i.getUnitPrice(), i.getLineAmount()))
+                        .map(i -> new OrderDtos.OrderItemResponse(i.getProductId(), i.getProductName(), i.getQuantity(), i.getUnitPrice(), i.getLineAmount()))
                         .toList()
         );
 
@@ -122,7 +122,7 @@ public class OrderService {
         return new OrderDtos.CreateOrderResult(false, "VALID_REQUEST", null);
     }
 
-    private record ResolvedItem(Long productId, int quantity, BigDecimal unitPrice, BigDecimal lineAmount) {}
+    private record ResolvedItem(Long productId, String productName, int quantity, BigDecimal unitPrice, BigDecimal lineAmount) {}
 
     @Transactional(readOnly = true)
     public List<OrderDtos.OrderResponse> listMyOrders(Long userId) {
@@ -132,7 +132,7 @@ public class OrderService {
                         o.getTotalAmount(),
                         o.getStatus(),
                         o.getItems().stream()
-                                .map(i -> new OrderDtos.OrderItemResponse(i.getProductId(), i.getQuantity(), i.getUnitPrice(), i.getLineAmount()))
+                                .map(i -> new OrderDtos.OrderItemResponse(i.getProductId(), i.getProductName(), i.getQuantity(), i.getUnitPrice(), i.getLineAmount()))
                                 .toList()
                 ))
                 .toList();

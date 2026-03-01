@@ -36,7 +36,7 @@ export function OrdersPage() {
         status: o.status,
         totalAmount: o.totalAmount,
         itemsText: o.items
-            .map((i) => `商品${i.productId}×${i.quantity}（小計${i.lineAmount.toFixed(2)}）`)
+            .map((i) => `${i.productName ?? `商品#${i.productId}`}×${i.quantity}（小計${i.lineAmount.toFixed(2)}）`)
             .join(" / "),
     }));
 

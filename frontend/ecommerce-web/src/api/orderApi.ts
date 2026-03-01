@@ -2,6 +2,7 @@ import { apiClient } from "./apiClient";
 
 export type OrderItem = {
     productId: number;
+    productName: string | null;
     quantity: number;
     unitPrice: number;
     lineAmount: number;
