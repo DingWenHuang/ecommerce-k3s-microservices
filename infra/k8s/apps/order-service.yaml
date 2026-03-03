@@ -64,6 +64,12 @@ spec:
                   key: internal-token
             - name: JAVA_TOOL_OPTIONS
               value: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
+          volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+      volumes:
+        - name: logs
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

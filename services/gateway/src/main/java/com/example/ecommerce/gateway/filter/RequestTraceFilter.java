@@ -2,6 +2,8 @@ package com.example.ecommerce.gateway.filter;
 
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -20,6 +22,7 @@ import reactor.core.publisher.Mono;
 @Component
 public class RequestTraceFilter implements GlobalFilter, Ordered {
 
+    private static final Logger log = LoggerFactory.getLogger(RequestTraceFilter.class);
     private static final String HEADER = "X-Request-Id";
 
     @Override
@@ -29,15 +32,27 @@ public class RequestTraceFilter implements GlobalFilter, Ordered {
             requestId = UUID.randomUUID().toString();
         }
 
-        MDC.put("requestId", requestId);
+        String finalRequestId = requestId;
+        String method = exchange.getRequest().getMethod().name();
+        String path = exchange.getRequest().getURI().getPath();
+
+        log.debug("[trace] 收到請求 requestId={} method={} path={}", finalRequestId, method, path);
+
+        MDC.put("requestId", finalRequestId);
 
         ServerHttpRequest mutated = exchange.getRequest()
                 .mutate()
-                .header(HEADER, requestId)
+                .header(HEADER, finalRequestId)
                 .build();
 
         return chain.filter(exchange.mutate().request(mutated).build())
-                .doFinally(signal -> MDC.remove("requestId"));
+                .doFinally(signal -> {
+                    int statusCode = exchange.getResponse().getStatusCode() != null
+                            ? exchange.getResponse().getStatusCode().value() : 0;
+                    log.debug("[trace] 回應完成 requestId={} method={} path={} status={} signal={}",
+                            finalRequestId, method, path, statusCode, signal);
+                    MDC.remove("requestId");
+                });
     }
 
     @Override

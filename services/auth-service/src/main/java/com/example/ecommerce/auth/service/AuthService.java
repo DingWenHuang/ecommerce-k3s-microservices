@@ -5,6 +5,8 @@ import com.example.ecommerce.auth.domain.UserEntity;
 import com.example.ecommerce.auth.repo.UserRepository;
 import com.example.ecommerce.auth.security.JwtService;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -33,9 +37,11 @@ public class AuthService {
     public void register(AuthDtos.RegisterRequest req) {
         if (req.username() == null || req.username().isBlank()
                 || req.password() == null || req.password().isBlank()) {
+            log.warn("[register] 欄位驗證失敗：username 或 password 為空");
             throw new IllegalArgumentException("username/password 不可為空");
         }
         if (userRepository.existsByUsername(req.username())) {
+            log.warn("[register] 帳號已存在 username={}", req.username());
             throw new IllegalArgumentException("帳號名稱「" + req.username() + "」已被使用，請選擇其他名稱");
         }
 
@@ -47,9 +53,13 @@ public class AuthService {
     @Transactional(readOnly = true)
     public AuthDtos.TokenResponse login(AuthDtos.LoginRequest req) {
         var user = userRepository.findByUsername(req.username())
-                .orElseThrow(() -> new IllegalArgumentException("帳號或密碼錯誤"));
+                .orElseThrow(() -> {
+                    log.warn("[login] 帳號不存在 username={}", req.username());
+                    return new IllegalArgumentException("帳號或密碼錯誤");
+                });
 
         if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
+            log.warn("[login] 密碼錯誤 username={}", req.username());
             throw new IllegalArgumentException("帳號或密碼錯誤");
         }
 
@@ -61,7 +71,10 @@ public class AuthService {
     @Transactional(readOnly = true)
     public AuthDtos.MeResponse me(String username) {
         UserEntity user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new IllegalArgumentException("找不到使用者"));
+                .orElseThrow(() -> {
+                    log.warn("[me] 找不到使用者 username={}", username);
+                    return new IllegalArgumentException("找不到使用者");
+                });
         return new AuthDtos.MeResponse(user.getId(), user.getUsername(), user.getRole());
     }
 }

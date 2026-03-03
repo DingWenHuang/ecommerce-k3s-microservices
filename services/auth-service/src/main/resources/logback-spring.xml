@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- 從 spring.application.name 取得服務名稱 -->
+    <springProperty scope="context" name="springAppName" source="spring.application.name" defaultValue="app"/>
+
+    <!-- Console appender：保留 stdout，kubectl logs 仍可用 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 每日滾動檔案 appender：每天一個檔案，只記錄當天內容 -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!-- 當天正在寫入的 log 檔（無日期後綴） -->
+        <file>/app/logs/${springAppName}.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- 每天午夜滾動，產生含日期的封存檔 -->
+            <fileNamePattern>/app/logs/${springAppName}-%d{yyyy-MM-dd}.log</fileNamePattern>
+            <!-- 最多保留 30 天 -->
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 抑制過多的 Hibernate/Spring 內部 DEBUG log -->
+    <logger name="org.hibernate" level="WARN"/>
+    <logger name="org.springframework" level="WARN"/>
+    <logger name="com.zaxxer.hikari" level="WARN"/>
+
+    <!-- 應用程式本身保持 INFO -->
+    <logger name="com.example.ecommerce" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+</configuration>

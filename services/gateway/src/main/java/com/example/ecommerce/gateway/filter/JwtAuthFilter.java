@@ -6,6 +6,8 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -34,6 +36,8 @@ import reactor.core.publisher.Mono;
 @Component
 public class JwtAuthFilter implements GlobalFilter, Ordered {
 
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthFilter.class);
+
     private final AntPathMatcher matcher = new AntPathMatcher();
 
     @Value("${security.jwt.secret:}")
@@ -44,6 +48,9 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        String path = exchange.getRequest().getURI().getPath();
+        String method = exchange.getRequest().getMethod().name();
+
         if (isPublic(exchange)) {
             return chain.filter(exchange);
         }
@@ -51,6 +58,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
         String auth = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         if (auth == null || !auth.startsWith("Bearer ")) {
             if (!enforce) return chain.filter(exchange); // demo 階段先不強制
+            log.warn("[jwt] 缺少 Authorization header method={} path={}", method, path);
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
@@ -58,6 +66,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
         if (jwtSecret == null || jwtSecret.isBlank()) {
             // 代表你沒有把 JWT_SECRET 注入，若 enforce=true 會直接拒絕
             if (!enforce) return chain.filter(exchange);
+            log.warn("[jwt] JWT_SECRET 未設定，拒絕請求 method={} path={}", method, path);
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
@@ -75,6 +84,8 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             String userId = String.valueOf(claims.get("userId", Object.class));
             String roles = String.valueOf(claims.get("roles", Object.class));
 
+            log.info("[jwt] 驗證成功 method={} path={} userId={} roles={}", method, path, userId, roles);
+
             var mutatedReq = exchange.getRequest().mutate()
                     .header("X-User-Id", userId)
                     .header("X-User-Roles", roles)
@@ -83,6 +94,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange.mutate().request(mutatedReq).build());
         } catch (Exception e) {
             if (!enforce) return chain.filter(exchange);
+            log.warn("[jwt] Token 驗證失敗 method={} path={} error={}", method, path, e.getMessage());
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }

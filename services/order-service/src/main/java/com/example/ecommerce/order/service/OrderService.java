@@ -6,6 +6,8 @@ import com.example.ecommerce.order.domain.OrderEntity;
 import com.example.ecommerce.order.domain.OrderItemEntity;
 import com.example.ecommerce.order.repo.OrderRepository;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +25,8 @@ import java.util.List;
 @Service
 public class OrderService {
 
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
+
     private final OrderRepository orderRepository;
     private final ProductClient productClient;
 
@@ -39,8 +43,10 @@ public class OrderService {
      */
     @Transactional
     public long createFlashSaleOrder(Long userId, Long productId) {
+        log.info("[order.flash-sale] 建立搶購訂單 userId={}, productId={}", userId, productId);
         ProductClient.ProductInfo product = productClient.getProductInfo(productId);
         if (!"FLASH_SALE".equals(product.productType())) {
+            log.warn("[order.flash-sale] 商品類型錯誤 productId={}, type={}", productId, product.productType());
             throw new IllegalStateException("非搶購類型商品");
         }
 
@@ -52,6 +58,7 @@ public class OrderService {
         order.addItem(new OrderItemEntity(productId, product.name(), 1, unitPrice, lineAmount));
 
         OrderEntity saved = orderRepository.save(order);
+        log.info("[order.flash-sale] 搶購訂單建立成功 userId={}, productId={}, orderId={}", userId, productId, saved.getId());
         return saved.getId();
     }
 
@@ -59,6 +66,7 @@ public class OrderService {
     public OrderDtos.CreateOrderResult createNormalOrder(Long userId, OrderDtos.CreateNormalOrderRequest request) {
         OrderDtos.CreateOrderResult validatedRequest = validateRequest(request);
         if (!"VALID_REQUEST".equals(validatedRequest.message())) {
+            log.warn("[orders.create] 請求驗證失敗 userId={}, reason={}", userId, validatedRequest.message());
             return validatedRequest;
         }
 
@@ -68,6 +76,7 @@ public class OrderService {
             ProductClient.ProductInfo product = productClient.getProductInfo(item.productId());
 
             if (!"NORMAL".equals(product.productType())) {
+                log.warn("[orders.create] 商品類型不合法 userId={}, productId={}, type={}", userId, item.productId(), product.productType());
                 return new OrderDtos.CreateOrderResult(false, "ILLEGAL_PRODUCT_TYPE", null);
             }
 
@@ -80,6 +89,7 @@ public class OrderService {
 
         // 2) 逐筆扣庫存（若中途失敗，這版先丟錯；後續可加 release 補償）
         for (ResolvedItem item : resolvedItems) {
+            log.info("[orders.create] 扣庫存 productId={}, qty={}", item.productId(), item.quantity());
             productClient.reserve(item.productId(), new ProductClient.ReserveRequest(item.quantity()));
         }
 
@@ -95,6 +105,7 @@ public class OrderService {
         }
 
         OrderEntity saved = orderRepository.save(order);
+        log.info("[orders.create] 訂單建立成功 userId={}, orderId={}, totalAmount={}", userId, saved.getId(), totalAmount);
         var resp = new OrderDtos.OrderResponse(
                 saved.getId(),
                 saved.getTotalAmount(),

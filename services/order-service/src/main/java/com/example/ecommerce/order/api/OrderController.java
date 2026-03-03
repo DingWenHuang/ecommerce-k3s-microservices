@@ -3,6 +3,8 @@ package com.example.ecommerce.order.api;
 import com.example.ecommerce.order.api.dto.OrderDtos;
 import com.example.ecommerce.order.service.OrderService;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -22,6 +24,8 @@ import java.util.List;
 @RequestMapping("/orders")
 public class OrderController {
 
+    private static final Logger log = LoggerFactory.getLogger(OrderController.class);
+
     private final OrderService service;
 
     public OrderController(OrderService service) {
@@ -32,9 +36,16 @@ public class OrderController {
     public ResponseEntity<?> createNormalOrder(Authentication authentication,
                                     @RequestBody OrderDtos.CreateNormalOrderRequest req) {
         Long userId = Long.valueOf(authentication.getName());
+        log.info("[orders.create] userId={}, 商品數量={}", userId,
+                req.items() == null ? 0 : req.items().size());
         var result = service.createNormalOrder(userId, req);
-        if (result.success()) return ResponseEntity.ok(result.order());
+        if (result.success()) {
+            log.info("[orders.create] 建立訂單成功 userId={}, orderId={}", userId,
+                    result.order() != null ? result.order().orderId() : "N/A");
+            return ResponseEntity.ok(result.order());
+        }
 
+        log.warn("[orders.create] 建立訂單失敗 userId={}, reason={}", userId, result.message());
         return ResponseEntity.badRequest().body(result);
     }
 

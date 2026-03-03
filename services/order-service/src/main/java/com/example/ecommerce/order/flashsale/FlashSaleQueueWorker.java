@@ -1,5 +1,7 @@
 package com.example.ecommerce.order.flashsale;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -9,6 +11,8 @@ import java.util.UUID;
 
 @Component
 public class FlashSaleQueueWorker {
+
+    private static final Logger log = LoggerFactory.getLogger(FlashSaleQueueWorker.class);
 
     private final FlashSaleRedisRepository redisRepository;
     private final FlashSaleService flashSaleService;
@@ -43,12 +47,15 @@ public class FlashSaleQueueWorker {
             ticketId = redisRepository.popQueueHead(productId);
             if (ticketId == null) return;
 
+            log.info("[worker] 取出票券 productId={}, ticketId={}", productId, ticketId);
+
             // 這張票拿到「出隊順序」：用來做 FIFO 證據
             dequeueSeq = redisRepository.nextDequeueSeq(productId);
 
             // 如果 ticket 已不存在（離線/TTL到）：
             // - 既然已出隊，就直接丟棄即可（這張不算成功）
             if (!redisRepository.ticketExists(ticketId)) {
+                log.warn("[worker] 票券已過期（離線/TTL到），略過 ticketId={}", ticketId);
                 return;
             }
 
@@ -66,6 +73,7 @@ public class FlashSaleQueueWorker {
 
         // 鎖外處理：reserve + 建單（慢的事情在鎖外做）
         if (ticketId != null && redisRepository.ticketExists(ticketId)) {
+            log.info("[worker] 開始處理票券 productId={}, ticketId={}, dequeueSeq={}", productId, ticketId, dequeueSeq);
             flashSaleService.processTicket(ticketId);
         }
     }

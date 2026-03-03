@@ -3,6 +3,8 @@ package com.example.ecommerce.order.flashsale;
 import com.example.ecommerce.order.api.dto.FlashSaleDtos;
 import com.example.ecommerce.order.client.ProductClient;
 import com.example.ecommerce.order.service.OrderService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +16,8 @@ import java.util.UUID;
 
 @Service
 public class FlashSaleService {
+
+    private static final Logger log = LoggerFactory.getLogger(FlashSaleService.class);
 
     private final FlashSaleRedisRepository redisRepository;
     private final ProductClient productClient;
@@ -40,6 +44,7 @@ public class FlashSaleService {
         // 1) 驗證商品是 FLASH_SALE（避免 NORMAL 誤入）
         ProductClient.ProductInfo product = productClient.getProductInfo(productId);
         if (!"FLASH_SALE".equals(product.productType())) {
+            log.warn("[flashsale.join] 商品非 FLASH_SALE 類型 userId={}, productId={}, type={}", userId, productId, product.productType());
             throw new IllegalStateException("Product is not FLASH_SALE");
         }
 
@@ -47,6 +52,7 @@ public class FlashSaleService {
         var existing = redisRepository.getActiveTicket(productId, userId);
         if (existing.isPresent()) {
             String existingTicketId = existing.get();
+            log.info("[flashsale.join] 使用者已在隊列中 userId={}, productId={}, ticketId={}", userId, productId, existingTicketId);
 
             // 仍刷新 active TTL（表示仍在線/仍想排隊）
             redisRepository.setActiveTicket(productId, userId, existing.get(), ticketTtl);
@@ -82,6 +88,7 @@ public class FlashSaleService {
         // 6) 將確定的 enqueueSeq 寫回 ticket hash（供 evidence 查詢）
         redisRepository.updateTicket(ticketId, Map.of("enqueueSeq", String.valueOf(enqueueSeq)));
 
+        log.info("[flashsale.join] 新票券入隊 userId={}, productId={}, ticketId={}, enqueueSeq={}", userId, productId, ticketId, enqueueSeq);
         return new FlashSaleDtos.JoinResponse(ticketId, enqueueSeq);
     }
 
@@ -142,15 +149,22 @@ public class FlashSaleService {
     @Transactional
     public void processTicket(String ticketId) {
         // 票不存在就算了（可能剛好過期/被清）
-        if (!redisRepository.ticketExists(ticketId)) return;
+        if (!redisRepository.ticketExists(ticketId)) {
+            log.warn("[flashsale.process] 票券不存在（可能已過期）ticketId={}", ticketId);
+            return;
+        }
 
         Map<Object, Object> map = redisRepository.getTicket(ticketId);
-        if (map == null || map.isEmpty()) return;
+        if (map == null || map.isEmpty()) {
+            log.warn("[flashsale.process] 票券資料為空 ticketId={}", ticketId);
+            return;
+        }
 
         // 這些欄位若缺失，代表票曾過期重建或資料不完整 → 直接標 ERROR 並結束
         Object pidObj = map.get("productId");
         Object uidObj = map.get("userId");
         if (pidObj == null || uidObj == null) {
+            log.error("[flashsale.process] 票券資料不完整 ticketId={}, productId={}, userId={}", ticketId, pidObj, uidObj);
             redisRepository.updateTicket(ticketId, Map.of("status", FlashSaleTicketStatus.ERROR.name()));
             redisRepository.setResultTtl(ticketId, resultTtl);
             return;
@@ -161,9 +175,11 @@ public class FlashSaleService {
 
         String status = String.valueOf(map.get("status"));
         if (!FlashSaleTicketStatus.QUEUED.name().equals(status)) {
+            log.info("[flashsale.process] 票券狀態非 QUEUED，略過 ticketId={}, status={}", ticketId, status);
             return;
         }
 
+        log.info("[flashsale.process] 開始處理票券 ticketId={}, userId={}, productId={}", ticketId, userId, productId);
         // 標記處理中（可讓前端看到 PROCESSING）
         redisRepository.updateTicket(ticketId, Map.of("status", FlashSaleTicketStatus.PROCESSING.name()));
 
@@ -183,13 +199,15 @@ public class FlashSaleService {
                 ));
 
                 redisRepository.setResultTtl(ticketId, resultTtl);
+                log.info("[flashsale.process] 搶購成功 ticketId={}, userId={}, productId={}, orderId={}", ticketId, userId, productId, orderId);
             } else {
-                redisRepository.updateTicket(ticketId, Map.of("status", FlashSaleTicketStatus.SOLD_OUT.name()
-                ));
+                redisRepository.updateTicket(ticketId, Map.of("status", FlashSaleTicketStatus.SOLD_OUT.name()));
                 redisRepository.setResultTtl(ticketId, resultTtl);
+                log.info("[flashsale.process] 庫存不足（SOLD_OUT）ticketId={}, userId={}, productId={}", ticketId, userId, productId);
             }
         } catch (Exception e) {
-            // 庫存不足或其他錯誤 → SOLD_OUT（demo 先統一）
+            log.error("[flashsale.process] 處理票券發生例外 ticketId={}, userId={}, productId={}, error={}",
+                    ticketId, userId, productId, e.getMessage(), e);
             redisRepository.updateTicket(ticketId, Map.of("status", FlashSaleTicketStatus.ERROR.name()));
             redisRepository.setResultTtl(ticketId, resultTtl);
         } finally {
